@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Monitoring System - Cockpit Command Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #080C14;
+            --bg-card: rgba(15, 23, 42, 0.75);
+            --border-card: rgba(51, 65, 85, 0.6);
+            --neon-blue: #00F0FF;
+            --neon-green: #10B981;
+            --neon-yellow: #F59E0B;
+            --neon-red: #EF4444;
+            --text-primary: #F8FAFC;
+            --text-secondary: #94A3B8;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image:
+                radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(239, 68, 68, 0.04) 0%, transparent 40%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .glass-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-card);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            padding: 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .logo-icon {
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, var(--neon-blue), #3B82F6);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+        }
+
+        .logo-icon svg { width: 24px; height: 24px; fill: white; }
+
+        .brand-text h1 {
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            background: linear-gradient(90deg, #FFFFFF, var(--neon-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-text p {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 30px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--neon-green);
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--neon-green);
+            box-shadow: 0 0 10px var(--neon-green);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; transform: scale(0.9); }
+            50% { opacity: 1; transform: scale(1.2); }
+            100% { opacity: 0.4; transform: scale(0.9); }
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1100px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+        }
+
+        .video-container {
+            position: relative;
+            border-radius: 14px;
+            overflow: hidden;
+            background: #000;
+            aspect-ratio: 4/3;
+            max-height: 520px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid rgba(51, 65, 85, 0.5);
+            transition: border-color 0.3s;
+        }
+
+        .video-container.hazard {
+            border-color: var(--neon-red) !important;
+            animation: hazardFlash 1s infinite alternate;
+        }
+
+        @keyframes hazardFlash {
+            from { box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); }
+            to { box-shadow: 0 0 35px rgba(239, 68, 68, 0.8); }
+        }
+
+        .video-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .hud-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 16px;
+        }
+
+        .reticle-corner {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-color: var(--neon-blue);
+            border-style: solid;
+            opacity: 0.7;
+        }
+
+        .top-left { top: 16px; left: 16px; border-width: 2px 0 0 2px; }
+        .top-right { top: 16px; right: 16px; border-width: 2px 2px 0 0; }
+        .bottom-left { bottom: 16px; left: 16px; border-width: 0 0 2px 2px; }
+        .bottom-right { bottom: 16px; right: 16px; border-width: 0 2px 2px 0; }
+
+        .hud-badge {
+            background: rgba(8, 12, 20, 0.75);
+            backdrop-filter: blur(8px);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--neon-blue);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            align-self: flex-start;
+        }
+
+        .hazard-banner {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+            padding: 10px 24px;
+            border-radius: 30px;
+            font-weight: 800;
+            font-size: 14px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
+            display: none;
+            animation: bounce 0.6s infinite alternate;
+        }
+
+        @keyframes bounce {
+            from { transform: translateX(-50%) translateY(0); }
+            to { transform: translateX(-50%) translateY(-6px); }
+        }
+
+        .video-toolbar {
+            display: flex;
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .telemetry-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .gauge-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .gauge-svg {
+            width: 160px;
+            height: 160px;
+            transform: rotate(-90deg);
+        }
+
+        .gauge-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.08);
+            stroke-width: 12;
+        }
+
+        .gauge-progress {
+            fill: none;
+            stroke: var(--neon-green);
+            stroke-width: 12;
+            stroke-dasharray: 440;
+            stroke-dashoffset: 44;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.5s ease, stroke 0.5s ease;
+        }
+
+        .gauge-text {
+            position: absolute;
+            top: 85px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .gauge-score {
+            font-size: 34px;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .gauge-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: -2px;
+        }
+
+        .status-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .item-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 12px;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s ease;
+        }
+
+        .item-info { display: flex; align-items: center; gap: 12px; }
+        .item-icon { font-size: 20px; }
+        .item-title { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+        .item-val { font-size: 15px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+
+        .counters-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .counter-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 12px;
+            padding: 12px 8px;
+            text-align: center;
+        }
+
+        .counter-num {
+            font-size: 20px;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--neon-blue);
+        }
+
+        .counter-lbl {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+            text-transform: uppercase;
+        }
+
+        .bottom-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 900px) {
+            .bottom-grid { grid-template-columns: 1fr; }
+        }
+
+        .chart-container {
+            height: 180px;
+            position: relative;
+            margin-top: 10px;
+        }
+
+        canvas { width: 100% !important; height: 100% !important; }
+
+        .log-table-container {
+            max-height: 180px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .log-table th {
+            text-align: left;
+            padding: 8px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: sticky;
+            top: 0;
+            background: #0f172a;
+        }
+
+        .log-table td {
+            padding: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .badge-hazard { color: var(--neon-red); font-weight: bold; }
+        .badge-warning { color: var(--neon-yellow); font-weight: bold; }
+        .badge-info { color: var(--neon-blue); }
+
+        .connection-status {
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--neon-green);
+        }
+
+        .connection-status.disconnected {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--neon-red);
+        }
+    </style>
+</head>
+<body>
+
+    <header class="glass-card">
+        <div class="brand">
+            <div class="logo-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+            </div>
+            <div class="brand-text">
+                <h1>DMS COCKPIT COMMAND CENTER</h1>
+                <p>AI DRIVER MONITORING & ACCIDENT PREVENTION SYSTEM</p>
+            </div>
+        </div>
+        <div class="header-controls">
+            <div id="status-pill" class="status-pill">
+                <div class="pulse-dot"></div>
+                <span id="status-text">SYSTEM ACTIVE</span>
+            </div>
+            <span id="connection-status" class="connection-status">CONNECTED</span>
+            <button class="btn" id="audio-toggle" onclick="toggleAudio()">
+                <span id="audio-icon">🔊</span>
+                <span id="audio-label">ALARM ON</span>
+            </button>
+            <button class="btn" onclick="toggleFullscreen()">
+                <span>🖥️</span> FULLSCREEN
+            </button>
+        </div>
+    </header>
+
+    <div class="dashboard-grid">
+        <div class="glass-card">
+            <div class="video-container" id="video-box">
+                <img src="/video_feed" class="video-feed" alt="Live Stream">
+
+                <div id="hazard-banner" class="hazard-banner">🚨 HAZARD DETECTED</div>
+
+                <div class="hud-overlay">
+                    <div class="reticle-corner top-left"></div>
+                    <div class="reticle-corner top-right"></div>
+                    <div class="reticle-corner bottom-left"></div>
+                    <div class="reticle-corner bottom-right"></div>
+
+                    <div style="display: flex; justify-content: space-between;">
+                        <div class="hud-badge" id="hud-fps">FPS: --</div>
+                        <div class="hud-badge" id="hud-timer">SESSION: 00:00:00</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="video-toolbar">
+                <button class="btn" onclick="takeSnapshot()">📷 SNAPSHOT FRAME</button>
+                <button class="btn" onclick="reloadStream()">🔄 REFRESH FEED</button>
+            </div>
+        </div>
+
+        <div class="telemetry-panel">
+            <div class="glass-card gauge-card">
+                <svg class="gauge-svg" viewBox="0 0 160 160">
+                    <circle class="gauge-bg" cx="80" cy="80" r="70"></circle>
+                    <circle id="gauge-bar" class="gauge-progress" cx="80" cy="80" r="70"></circle>
+                </svg>
+                <div class="gauge-text">
+                    <div id="safety-score" class="gauge-score">100%</div>
+                    <div class="gauge-label">ATTENTION SCORE</div>
+                </div>
+            </div>
+
+            <div class="status-list">
+                <div class="item-card">
+                    <div class="item-info">
+                        <span class="item-icon">👁️</span>
+                        <span class="item-title">EYES STATUS</span>
+                    </div>
+                    <span id="eyes-val" class="item-val" style="color: var(--neon-green)">NORMAL</span>
+                </div>
+
+                <div class="item-card">
+                    <div class="item-info">
+                        <span class="item-icon">👄</span>
+                        <span class="item-title">MOUTH STATUS</span>
+                    </div>
+                    <span id="mouth-val" class="item-val" style="color: var(--neon-green)">NORMAL</span>
+                </div>
+
+                <div class="item-card">
+                    <div class="item-info">
+                        <span class="item-icon">🚗</span>
+                        <span class="item-title">DRIVER ACTION</span>
+                    </div>
+                    <span id="action-val" class="item-val" style="color: var(--neon-green)">NORMAL</span>
+                </div>
+            </div>
+
+            <div class="counters-grid">
+                <div class="counter-card">
+                    <div id="cnt-yawns" class="counter-num">0</div>
+                    <div class="counter-lbl">YAWNS</div>
+                </div>
+                <div class="counter-card">
+                    <div id="cnt-drowsy" class="counter-num">0</div>
+                    <div class="counter-lbl">DROWSY</div>
+                </div>
+                <div class="counter-card">
+                    <div id="cnt-distractions" class="counter-num">0</div>
+                    <div class="counter-lbl">HAZARDS</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bottom-grid">
+        <div class="glass-card">
+            <h3 style="font-size: 14px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">LIVE ATTENTION TELEMETRY (30S)</h3>
+            <div class="chart-container">
+                <canvas id="telemetryChart"></canvas>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <h3 style="font-size: 14px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">INCIDENT LOG HISTORY</h3>
+            <div class="log-table-container">
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>TIME</th>
+                            <th>SEVERITY</th>
+                            <th>EVENT DESCRIPTION</th>
+                        </tr>
+                    </thead>
+                    <tbody id="log-body">
+                        <tr>
+                            <td colspan="3" style="text-align: center; color: var(--text-secondary)">No incident logs yet. Monitoring active.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io({
+            transports: ['websocket', 'polling']
+        });
+
+        let audioCtx = null;
+        let audioEnabled = true;
+        let isAlarmPlaying = false;
+        let chartData = Array(30).fill(100);
+
+        socket.on('connect', () => {
+            console.log('Connected to DMS server');
+            document.getElementById('connection-status').textContent = 'CONNECTED';
+            document.getElementById('connection-status').classList.remove('disconnected');
+            requestTelemetry();
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Disconnected from DMS server');
+            document.getElementById('connection-status').textContent = 'DISCONNECTED';
+            document.getElementById('connection-status').classList.add('disconnected');
+        });
+
+        socket.on('telemetry_update', (d) => {
+            updateTelemetry(d);
+        });
+
+        socket.on('connected', (data) => {
+            console.log('Server acknowledged connection:', data);
+        });
+
+        function requestTelemetry() {
+            socket.emit('request_telemetry');
+            setTimeout(requestTelemetry, 200);
+        }
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playAlarmSound() {
+            if (!audioEnabled) return;
+            initAudio();
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            if (isAlarmPlaying) return;
+            isAlarmPlaying = true;
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.3);
+
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.3);
+
+            setTimeout(() => { isAlarmPlaying = false; }, 350);
+        }
+
+        function toggleAudio() {
+            audioEnabled = !audioEnabled;
+            document.getElementById('audio-icon').textContent = audioEnabled ? '🔊' : '🔇';
+            document.getElementById('audio-label').textContent = audioEnabled ? 'ALARM ON' : 'ALARM MUTED';
+            if (audioEnabled) initAudio();
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        }
+
+        function reloadStream() {
+            const feed = document.querySelector('.video-feed');
+            feed.src = '/video_feed?' + new Date().getTime();
+        }
+
+        function takeSnapshot() {
+            window.open('/snapshot', '_blank');
+        }
+
+        function renderChart() {
+            const canvas = document.getElementById('telemetryChart');
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            for (let y = 0; y <= h; y += h / 4) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+            }
+
+            const grad = ctx.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0, 'rgba(0, 240, 255, 0.4)');
+            grad.addColorStop(1, 'rgba(0, 240, 255, 0.0)');
+
+            ctx.beginPath();
+            const step = w / (chartData.length - 1);
+            for (let i = 0; i < chartData.length; i++) {
+                const x = i * step;
+                const y = h - (chartData[i] / 100) * (h - 20) - 10;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+
+            ctx.strokeStyle = '#00F0FF';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            ctx.lineTo(w, h);
+            ctx.lineTo(0, h);
+            ctx.fillStyle = grad;
+            ctx.fill();
+        }
+
+        function updateTelemetry(d) {
+            const eyesVal = document.getElementById('eyes-val');
+            const mouthVal = document.getElementById('mouth-val');
+            const actionVal = document.getElementById('action-val');
+
+            eyesVal.textContent = d.eyes_status.toUpperCase();
+            mouthVal.textContent = d.yawn_status.toUpperCase();
+            actionVal.textContent = d.action.toUpperCase();
+
+            eyesVal.style.color = d.eyes_status.includes('closed') ? 'var(--neon-red)' : 'var(--neon-green)';
+            mouthVal.style.color = d.yawn_status.includes('yawn') ? 'var(--neon-yellow)' : 'var(--neon-green)';
+            actionVal.style.color = d.action !== 'Normal' ? 'var(--neon-red)' : 'var(--neon-green)';
+
+            document.getElementById('hud-fps').textContent = `FPS: ${d.fps}`;
+            document.getElementById('hud-timer').textContent = `SESSION: ${d.session_time}`;
+
+            document.getElementById('cnt-yawns').textContent = d.total_yawns;
+            document.getElementById('cnt-drowsy').textContent = d.total_drowsy;
+            document.getElementById('cnt-distractions').textContent = d.total_distractions;
+
+            const score = d.safety_score;
+            document.getElementById('safety-score').textContent = `${score}%`;
+            const bar = document.getElementById('gauge-bar');
+            const circumference = 2 * Math.PI * 70;
+            const offset = circumference - (score / 100) * circumference;
+            bar.style.strokeDashoffset = offset;
+
+            if (score >= 80) bar.style.stroke = 'var(--neon-green)';
+            else if (score >= 45) bar.style.stroke = 'var(--neon-yellow)';
+            else bar.style.stroke = 'var(--neon-red)';
+
+            const vBox = document.getElementById('video-box');
+            const banner = document.getElementById('hazard-banner');
+
+            if (d.risk_level === 'CRITICAL HAZARD') {
+                vBox.classList.add('hazard');
+                banner.style.display = 'block';
+                banner.textContent = d.action !== 'Normal' ? `🚨 ${d.action.toUpperCase()} HAZARD` : '🚨 DROWSINESS ALERT';
+                playAlarmSound();
+            } else if (d.risk_level === 'WARNING') {
+                vBox.classList.remove('hazard');
+                banner.style.display = 'block';
+                banner.style.background = 'rgba(245, 158, 11, 0.9)';
+                banner.textContent = '⚠️ DRIVER DISTRACTED';
+            } else {
+                vBox.classList.remove('hazard');
+                banner.style.display = 'none';
+            }
+
+            chartData.shift();
+            chartData.push(score);
+            renderChart();
+
+            if (d.event_log && d.event_log.length > 0) {
+                const tbody = document.getElementById('log-body');
+                let html = '';
+                d.event_log.slice(-10).reverse().forEach(log => {
+                    const sevClass = log.severity === 'HAZARD' ? 'badge-hazard' : (log.severity === 'WARNING' ? 'badge-warning' : 'badge-info');
+                    html += `<tr>
+                        <td>${log.time}</td>
+                        <td class="${sevClass}">${log.severity}</td>
+                        <td>${log.desc}</td>
+                    </tr>`;
+                });
+                tbody.innerHTML = html;
+            }
+        }
+
+        window.addEventListener('resize', renderChart);
+        window.addEventListener('click', () => { initAudio(); }, { once: true });
+    </script>
+</body>
+</html>

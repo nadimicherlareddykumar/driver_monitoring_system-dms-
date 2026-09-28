@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "driver-monitoring"
+version = "0.1.0"
+description = "Driver Monitoring System for drowsiness and distraction detection"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "torch>=1.11.0",
+    "torchvision>=0.12.0",
+    "opencv-python>=4.5.5",
+    "mediapipe>=0.8.9.1,<=0.10.14",
+    "numpy>=1.21.0",
+    "h5py>=3.0.0",
+    "scikit-learn>=1.0.0",
+    "matplotlib>=3.5.0",
+    "flask>=2.0.0",
+    "flask-socketio>=5.0.0",
+    "python-socketio>=5.0.0",
+    "eventlet>=0.33.0",
+    "ultralytics>=8.0.0",
+    "pandas>=1.4.0",
+]
+
+[project.scripts]
+dms = "dms:main"
+dms-train = "train:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "pre-commit>=3.0.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["dms_utils*", "facial_tracking*", "dms_server*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["dms_utils", "facial_tracking", "net"]
+omit = ["tests/*", "*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["E501"]

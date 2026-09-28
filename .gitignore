@@ -3,3 +3,16 @@
 *.pt
 *.mp4
 *.avi
+.venv/
+.venv39/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+uploads/
+incidents/
+videos/
+*.egg-info/
+.egg-info/

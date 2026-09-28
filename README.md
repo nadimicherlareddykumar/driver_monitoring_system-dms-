@@ -1,48 +1,66 @@
-# driver_monitoring_system
+# Driver Monitoring System
 
-This is a project aimed to monitor a driver's status and actions, such as yawn, phonecall, etc.
+Real-time driver-monitoring system for drowsiness, gaze diversion, facial occlusion, yawning, and phone distraction. It combines MediaPipe facial landmarks, a two-class MobileNet action classifier, and YOLO phone detection.
 
-## Architecture
+## Supported applications
 
-The driver monitoring system consists of two parts.
+The canonical dashboard is the root application:
 
-* Facial tracking: an API based on [Mediapipe](https://github.com/google/mediapipe) to track facial status, which predicts the eye status (open, close), if open, the gazing direction (left, right, center), and yawn.
-* Action detection: a deep learning model (MobileNet) to predcit driver's behavior (phonecall, texting). [Yolov5](https://github.com/ultralytics/yolov5) is further used to detect phones to enhance performance.
-
-## Requirements
-
-```
-python=3.8
-tensorflow=2.8.0
-torch=1.11.0
-opencv-python=4.5.5
-mediapipe=0.8.9.1
-matplotlib=3.5.1
-numpy=1.22.3
-scikit-learn=1.0.2
+```powershell
+python dms_server.py
 ```
 
-## Usage
+It listens only on `http://127.0.0.1:5000`. `python -m dms_server.app` exposes the same application for WSGI tooling; it is not a second implementation.
 
-```bash
-$ git clone https://github.com/jhan15/driver_monitoring.git
-$ cd driver_monitoring
+The original command-line viewer remains available:
 
-# driver monitorting system
-$ python3 dms.py --checkpoint models/model_split.h5 --video <path_to_video> 
-                                                    --webcam <cam_id> # or
-
-# play with only facial tracking
-$ python3 facial.py
+```powershell
+dms --webcam 0
+dms --video path\to\drive.mp4 --save
 ```
 
-## Dataset
+## Installation
 
-The dataset used to train action detection model is [DMD](https://github.com/Vicomtech/DMD-Driver-Monitoring-Dataset).
+Use Python 3.9 or later and install the project with its development tools when running tests:
 
-## Demo
+```powershell
+python -m pip install -e ".[dev]"
+```
 
-<p align="center">
-  <img src="https://user-images.githubusercontent.com/62132206/158055802-8e1146f8-32ef-4ae4-967a-eb79ac42e172.gif?raw=true">
-  <img src="https://user-images.githubusercontent.com/62132206/158055799-22effa40-89d2-46da-a317-d58ea3e186b5.gif?raw=true">
-</p>
+The required inference file is `models/model_split.h5`. The action classifier uses a local torchvision MobileNetV2 checkpoint when present; it intentionally does not download one during application startup. YOLO is initialized on first video stream and may require an already-cached Torch Hub repository or network access.
+
+## Dashboard operation
+
+The dashboard initializes models on the first `/video_feed` request. Check `/health` to see which components loaded and any component-specific errors.
+
+Runtime uploads and incident snapshots are stored in `uploads/` and `incidents/`; these directories are intentionally ignored by Git.
+
+For deployments beyond the local machine, enable token checks for commands that change camera, speed, engine, uploaded video, or incident data:
+
+```powershell
+$env:DMS_REQUIRE_API_TOKEN = "true"
+$env:DMS_API_TOKEN = "replace-with-a-long-random-value"
+python dms_server.py
+```
+
+Authenticated API requests must send that value in the `X-API-Token` header. Configure `DMS_MAX_UPLOAD_BYTES` to change the default 1 GB upload limit.
+
+## Training
+
+Training uses PyTorch and exports the HDF5 classifier head format consumed by the runtime:
+
+```powershell
+python train.py --data-path path\to\DMD --trainer split --save-path models\model_split.h5
+```
+
+`--trainer random` performs a stratified random split; `--trainer split` holds out the original fifth subject.
+
+## Quality checks
+
+```powershell
+ruff check .
+ruff format --check .
+pytest --cov=. --cov-report=term-missing
+```
+
+The CI workflow runs these checks on Python 3.9.
